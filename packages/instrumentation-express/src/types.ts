@@ -91,4 +91,16 @@ export interface ExpressInstrumentationConfig extends InstrumentationConfig {
 
     /** If set to true, plugin will include semantic http attributes in each express span */
     includeHttpAttributes?: boolean;
+
+    includeRequestHeaders?: boolean;
+
+    maskHeaders?: string[];
+
+    removeHeaders?: string[];
+
+    includeRequestBody?: boolean;
+
+    includeResponseBody?: boolean;
+
+    includeQueryParam?: boolean;
 }

@@ -1,5 +1,5 @@
-import { getRPCMetadata } from '@opentelemetry/core';
-import { SpanKind, diag, context } from '@opentelemetry/api';
+import {getRPCMetadata} from '@opentelemetry/core';
+import {SpanKind, diag, context} from '@opentelemetry/api';
 import {
     LayerPath,
     ExpressLayer,
@@ -11,7 +11,7 @@ import {
     CONSUMED_ROUTE_STATE,
     ExpressConsumedRouteState,
 } from './types';
-import { VERSION } from './version';
+import {VERSION} from './version';
 import {
     InstrumentationBase,
     InstrumentationModuleDefinition,
@@ -29,9 +29,9 @@ import {
     getSpanNameOnResEnd,
     parseResponseStatus,
 } from './utils/attributes';
-import { consumeLayerPathAndUpdateState, createInitialRouteState } from './utils/route-context';
-import { getLayerPathFromFirstArg } from './utils/layer-path';
-import { SemanticAttributes } from '@opentelemetry/semantic-conventions';
+import {consumeLayerPathAndUpdateState, createInitialRouteState} from './utils/route-context';
+import {getLayerPathFromFirstArg} from './utils/layer-path';
+import {SemanticAttributes} from '@opentelemetry/semantic-conventions';
 
 const originalLayerStore = Symbol('otel.express-plugins.orig-layer-export');
 
@@ -107,6 +107,7 @@ export class ExpressInstrumentation extends InstrumentationBase<typeof express> 
             this[PATH_STORE] = getLayerPathFromFirstArg(path, options ?? {});
             return origLayerConstructor.call(this, path, options, fn);
         }
+
         OtelPatchedLayer.prototype = LayerPrototype;
         OtelPatchedLayer[originalLayerStore] = moduleExports;
 
@@ -133,7 +134,7 @@ export class ExpressInstrumentation extends InstrumentationBase<typeof express> 
                 return original.apply(this, arguments);
             }
 
-            const { origState, newState } = self.getRoutingStateOnConsumingPath(req, this);
+            const {origState, newState} = self.getRoutingStateOnConsumingPath(req, this);
 
             const pluginNext: express.NextFunction = function errorHandlingNext(err?: any): any {
                 if (err && err !== 'route' && err !== 'router') {
@@ -159,7 +160,7 @@ export class ExpressInstrumentation extends InstrumentationBase<typeof express> 
                 return original.apply(this, arguments);
             }
 
-            const { origState, newState } = self.getRoutingStateOnConsumingPath(req, this);
+            const {origState, newState} = self.getRoutingStateOnConsumingPath(req, this);
 
             const pluginNext: express.NextFunction = function errorHandlingNext(err?: any): any {
                 if (err !== 'route' && err !== 'router') {
@@ -187,7 +188,8 @@ export class ExpressInstrumentation extends InstrumentationBase<typeof express> 
                 enumerable: false,
                 value: true,
             });
-        } catch {}
+        } catch {
+        }
     }
 
     private registerInstrumentationMiddleware(app: express.Application, moduleVersion?: string) {
@@ -208,7 +210,7 @@ export class ExpressInstrumentation extends InstrumentationBase<typeof express> 
 
             if (plugin._config.requestHook) {
                 safeExecuteInTheMiddle(
-                    () => plugin._config.requestHook(span, { moduleVersion, req, res }),
+                    () => plugin._config.requestHook(span, {moduleVersion, req, res}),
                     (e) => {
                         if (e) diag.error(`opentelemetry.express instrumentation: requestHook error`, e);
                     },
@@ -246,7 +248,29 @@ export class ExpressInstrumentation extends InstrumentationBase<typeof express> 
                 if (newSpanName) {
                     span.updateName(newSpanName);
                 }
+                if (plugin._config.includeRequestBody && req.body) {
+                    span.setAttribute('http.request.body', JSON.stringify(req.body));
+                }
 
+                if (plugin._config.includeQueryParam && req.query) {
+                    span.setAttribute('http.request.query', JSON.stringify(req.query));
+                }
+
+                if (plugin._config.includeRequestHeaders) {
+                    const headers = {};
+                    for (const [key, value] of Object.entries(req.headers)) {
+                        if (plugin._config.removeHeaders && plugin._config.removeHeaders.includes(key)) {
+                            continue;
+                        }
+
+                        if (plugin._config.maskHeaders && plugin._config.maskHeaders.includes(key)) {
+                            headers[key] = "*";
+                        } else {
+                            headers[key] = value;
+                        }
+                    }
+                    span.setAttribute('http.request.headers', JSON.stringify(headers));
+                }
                 span.end();
 
                 return origRes;
@@ -286,7 +310,10 @@ export class ExpressInstrumentation extends InstrumentationBase<typeof express> 
 
             const initialState: ExpressConsumedRouteState = createInitialRouteState(req);
             const patchedNext = function (err?: any) {
-                return self.runMiddlewareWithContext({ ...initialState, isUnhandled: true }, req, () => next(err));
+                return self.runMiddlewareWithContext({
+                    ...initialState,
+                    isUnhandled: true
+                }, req, () => next(err));
             };
             return self.runMiddlewareWithContext(initialState, req, () => original.call(this, req, res, patchedNext));
         };
@@ -305,11 +332,11 @@ export class ExpressInstrumentation extends InstrumentationBase<typeof express> 
             const errorState = {
                 errors: ['internal error in express instrumentation: missing route context'],
             };
-            return { origState: errorState, newState: errorState };
+            return {origState: errorState, newState: errorState};
         }
         const currentLayerPath: LayerPath = layer[PATH_STORE];
         const newExpressRouteState = consumeLayerPathAndUpdateState(currentState, req, currentLayerPath);
-        return { origState: currentState, newState: newExpressRouteState };
+        return {origState: currentState, newState: newExpressRouteState};
     }
 
     // we would like to rely on otel context which propagate correctly via async calls.
